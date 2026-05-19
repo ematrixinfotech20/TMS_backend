@@ -1,13 +1,16 @@
 import datetime
 import random
 import string
+import jwt
 from fastapi import HTTPException
 from schemas.user import UserRegister, SetPasswordReq, UserLogin, VerifyOTPReq
-from core.security import verify_password, get_password_hash, create_access_token
+from core.security import verify_password, get_password_hash, create_access_token, SECRET_KEY, ALGORITHM
 from services.email_service import EmailService
+import os
+
+settings_site_url = os.getenv("SITE_URL")
 
 class AuthService:
-    
     @staticmethod
     def register_user(user: UserRegister, db):
         with db.cursor() as cursor:
@@ -19,13 +22,17 @@ class AuthService:
             sql = "INSERT INTO users (first_name, last_name, email, role_id) VALUES (%s, %s, %s, %s)"
             cursor.execute(sql, (user.first_name, user.last_name, user.email, role_id))
             db.commit()
+            user_id = cursor.lastrowid
+            
+            token_payload = {"id": user_id, "email": user.email}
+            token = jwt.encode(token_payload, SECRET_KEY, algorithm=ALGORITHM)
             
             subject = "Set Your TMS Password"
             context = {
                 "subject": subject,
                 "title": "Welcome to TMS!",
                 "message": "We are excited to have you on board. Please set your password to activate your account.",
-                "action_link": f"http://localhost:5173/set-password?token={user.email}",
+                "action_link": f"{settings_site_url}/set-password?token={token}",
                 "action_text": "Set Password"
             }
             EmailService.send_email(user.email, subject, "email_template.html", context)
@@ -34,15 +41,24 @@ class AuthService:
 
     @staticmethod
     def set_password(req: SetPasswordReq, db):
+        try:
+            payload = jwt.decode(req.token, SECRET_KEY, algorithms=[ALGORITHM])
+            user_id = payload.get("id")
+            email = payload.get("email")
+            if not user_id or not email:
+                raise HTTPException(status_code=400, detail="Invalid token payload")
+        except jwt.PyJWTError:
+            raise HTTPException(status_code=400, detail="Invalid or expired token")
+
         with db.cursor() as cursor:
-            cursor.execute("SELECT id, is_active FROM users WHERE email=%s", (req.token,))
+            cursor.execute("SELECT id, is_active FROM users WHERE id=%s AND email=%s", (user_id, email))
             user = cursor.fetchone()
             if not user:
                 raise HTTPException(status_code=404, detail="Invalid token/email")
                 
             hashed_password = get_password_hash(req.new_password)
-            sql = "UPDATE users SET password_hash=%s, is_active=True WHERE email=%s"
-            cursor.execute(sql, (hashed_password, req.token))
+            sql = "UPDATE users SET password_hash=%s, is_active=True WHERE id=%s"
+            cursor.execute(sql, (hashed_password, user_id))
             db.commit()
         return {"message": "Password set successfully. You can now login."}
 
@@ -52,21 +68,36 @@ class AuthService:
             cursor.execute("SELECT id, role_id, first_name, last_name, password_hash, is_active FROM users WHERE email=%s", (req.email,))
             user = cursor.fetchone()
             if not user or not user.get('password_hash'):
-                raise HTTPException(status_code=400, detail="Invalid credentials")
+                return {"data": None, "message": "Invalid credentials", "status": 400}
                 
             if not user['is_active']:
-                raise HTTPException(status_code=400, detail="Account not active")
+                return {"data": None, "message": "Account not active", "status": 400}
                 
             if not verify_password(req.password, user['password_hash']):
-                raise HTTPException(status_code=400, detail="Invalid credentials")
+                return {"data": None, "message": "Invalid credentials", "status": 400}
                 
             # Build permissions object
             cursor.execute("SELECT name FROM roles WHERE id=%s", (user['role_id'],))
             role_record = cursor.fetchone()
             role_name = role_record['name'] if role_record else ""
 
-            cursor.execute("SELECT modules_action_id FROM role_actions WHERE role_id=%s", (user['role_id'],))
-            user_actions = [row['modules_action_id'] for row in cursor.fetchall()]
+            cursor.execute(
+                """
+                SELECT ma.module_id, ma.action_id
+                FROM role_module_actions rma
+                JOIN modules_actions ma ON rma.module_action_id = ma.id
+                WHERE rma.role_id = %s
+                """,
+                (user['role_id'],)
+            )
+            role_assigned = cursor.fetchall()
+
+            role_action_map = {}
+            for ra in role_assigned:
+                mid = ra["module_id"]
+                if mid not in role_action_map:
+                    role_action_map[mid] = []
+                role_action_map[mid].append(ra["action_id"])
 
             cursor.execute("SELECT id, name FROM functionalities")
             funcs = cursor.fetchall()
@@ -74,17 +105,13 @@ class AuthService:
             cursor.execute("SELECT id, functionality_id, name FROM modules")
             all_modules = cursor.fetchall()
 
-            cursor.execute("SELECT module_id, action_id FROM modules_actions")
-            mod_actions = cursor.fetchall()
-
             db.commit()
 
             functionalities_data = []
             for f in funcs:
                 f_mods = []
                 for m in [mod for mod in all_modules if mod['functionality_id'] == f['id']]:
-                    m_actions = [ma['action_id'] for ma in mod_actions if ma['module_id'] == m['id']]
-                    assigned_actions = list(set(m_actions) & set(user_actions))
+                    assigned_actions = role_action_map.get(m['id'], [])
                     f_mods.append({
                         "moduleName": m['name'],
                         "roleAssignedActions": assigned_actions
@@ -135,8 +162,23 @@ class AuthService:
             role_record = cursor.fetchone()
             role_name = role_record['name'] if role_record else ""
 
-            cursor.execute("SELECT action_id FROM role_actions WHERE role_id=%s", (user['role_id'],))
-            user_actions = [row['action_id'] for row in cursor.fetchall()]
+            cursor.execute(
+                """
+                SELECT ma.module_id, ma.action_id
+                FROM role_module_actions rma
+                JOIN modules_actions ma ON rma.module_action_id = ma.id
+                WHERE rma.role_id = %s
+                """,
+                (user['role_id'],)
+            )
+            role_assigned = cursor.fetchall()
+
+            role_action_map = {}
+            for ra in role_assigned:
+                mid = ra["module_id"]
+                if mid not in role_action_map:
+                    role_action_map[mid] = []
+                role_action_map[mid].append(ra["action_id"])
 
             cursor.execute("SELECT id, name FROM functionalities")
             funcs = cursor.fetchall()
@@ -144,17 +186,13 @@ class AuthService:
             cursor.execute("SELECT id, functionality_id, name FROM modules")
             all_modules = cursor.fetchall()
 
-            cursor.execute("SELECT module_id, action_id FROM modules_actions")
-            mod_actions = cursor.fetchall()
-
             db.commit()
 
             functionalities_data = []
             for f in funcs:
                 f_mods = []
                 for m in [mod for mod in all_modules if mod['functionality_id'] == f['id']]:
-                    m_actions = [ma['action_id'] for ma in mod_actions if ma['module_id'] == m['id']]
-                    assigned_actions = list(set(m_actions) & set(user_actions))
+                    assigned_actions = role_action_map.get(m['id'], [])
                     f_mods.append({
                         "moduleName": m['name'],
                         "roleAssignedActions": assigned_actions
@@ -187,15 +225,48 @@ class AuthService:
     def forgot_password(email: str, db):
         with db.cursor() as cursor:
             cursor.execute("SELECT id FROM users WHERE email=%s", (email,))
-            if cursor.fetchone():
+            user = cursor.fetchone()
+            if user:
+                user_id = user['id']
+                token_payload = {"id": user_id, "email": email}
+                token = jwt.encode(token_payload, SECRET_KEY, algorithm=ALGORITHM)
+                
                 subject = "Reset Your TMS Password"
                 context = {
                     "subject": subject,
                     "title": "Password Reset Request",
                     "message": "We received a request to reset your password. If you didn't make this request, you can safely ignore this email.",
-                    "action_link": f"http://localhost:5173/set-password?token={email}",
+                    "action_link": f"{settings_site_url}/set-password?v={token}",
                     "action_text": "Reset Password"
                 }
                 EmailService.send_email(email, subject, "email_template.html", context)
                 
         return {"message": "If that email exists, a reset link has been sent."}
+
+    @staticmethod
+    def verify_token(token: str, db):
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            user_id = payload.get("id")
+            email = payload.get("email")
+            if not user_id or not email:
+                raise HTTPException(status_code=400, detail="Invalid token payload")
+        except jwt.PyJWTError:
+            raise HTTPException(status_code=400, detail="Invalid or expired token")
+            
+        with db.cursor() as cursor:
+            cursor.execute("SELECT id, email, is_active FROM users WHERE id=%s AND email=%s", (user_id, email))
+            user = cursor.fetchone()
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+                
+        return {"message": "Token is valid", "user": {"id": user_id, "email": email}}
+
+    @staticmethod
+    def get_dashboard_data(current_user_id: int, db):
+        with db.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) as count FROM assigned_tickets WHERE assign_to = %s", (current_user_id,))
+            result = cursor.fetchone()
+            ticket_count = result['count'] if result else 0
+        return {"assigned_tickets_count": ticket_count}
+

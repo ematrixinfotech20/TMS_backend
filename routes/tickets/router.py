@@ -14,7 +14,7 @@ router = APIRouter(prefix="/tickets", tags=["Tickets"])
 class TicketCreate(BaseModel):
     project_id: int
     project_name: str
-    department_id: int
+    department_id: Optional[int] = None
     title: str = Field(..., min_length=1)
     description: Optional[str] = None
     working_hours: Optional[str]
@@ -26,7 +26,7 @@ class TicketCreate(BaseModel):
 
 class TicketUpdate(BaseModel):
     project_id: int
-    department_id: int
+    department_id: Optional[int] = None
     title: str = Field(..., min_length=1)
     description: Optional[str] = None
     working_hours: Optional[str]
@@ -58,6 +58,7 @@ class TicketResponse(BaseModel):
     as_customer: bool
     for_customer: bool
     created_by: Optional[int]
+    created_by_name: Optional[str]
     created_date: datetime
     status_id: Optional[int] = None
     status_name: Optional[str] = None

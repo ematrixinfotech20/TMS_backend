@@ -53,6 +53,14 @@ class TicketService:
         else:
             ticket_dict['assignees'] = []
         ticket_dict['attachments'] = attachments
+        
+        if ticket_dict['created_by']:
+            cursor.execute("SELECT first_name, last_name FROM users WHERE id = %s", (int(ticket_dict['created_by']),))
+            created_by = cursor.fetchone()
+            ticket_dict['created_by_name'] = f"{created_by['first_name']} {created_by['last_name']}"
+        else:
+            ticket_dict['created_by_name'] = "Unknown"
+
         return ticket_dict
 
     @staticmethod
@@ -139,41 +147,51 @@ class TicketService:
                     assignee_vals
                 )
                 db.commit()
+            else:
+                cursor.execute("SELECT id FROM users WHERE role_id = 1")
+                assignees = cursor.fetchall()
+                ticket.assignees = [uid for uid in assignees]
+                assignee_vals = [(ticket_id, uid['id'], current_user_id) for uid in assignees]
+                cursor.executemany(
+                    "INSERT INTO assigned_tickets (ticket_id, assign_to, created_by) VALUES (%s, %s, %s)",
+                    assignee_vals
+                )
+                db.commit()
 
-                # Collect unique recipients for assignees
-                format_strings = ','.join(['%s'] * len(ticket.assignees))
-                cursor.execute(f"SELECT email, first_name FROM users WHERE id IN ({format_strings})", tuple(ticket.assignees))
-                for u in cursor.fetchall():
-                    recipients[u['email']] = u['first_name']
+            # Collect unique recipients for assignees
+            format_strings = ','.join(['%s'] * len(ticket.assignees))
+            cursor.execute(f"SELECT email, first_name FROM users WHERE id IN ({format_strings})", tuple(ticket.assignees))
+            for u in cursor.fetchall():
+                recipients[u['email']] = u['first_name']
 
-                # 2. Add Project Client
-                cursor.execute("SELECT u.email, u.first_name FROM users u JOIN projects p ON u.id = p.client_id WHERE p.id = %s", (ticket.project_id,))
-                client = cursor.fetchone()
-                if client:
-                    recipients[client['email']] = client['first_name']
+            # 2. Add Project Client
+            cursor.execute("SELECT u.email, u.first_name FROM users u JOIN projects p ON u.id = p.client_id WHERE p.id = %s", (ticket.project_id,))
+            client = cursor.fetchone()
+            if client:
+                recipients[client['email']] = client['first_name']
 
-                # 3. Add all Administrators (role_id = 1)
-                cursor.execute("SELECT email, first_name FROM users WHERE role_id = 1")
-                for admin in cursor.fetchall():
-                    recipients[admin['email']] = admin['first_name']
+            # 3. Add all Administrators (role_id = 1)
+            cursor.execute("SELECT email, first_name FROM users WHERE role_id = 1")
+            for admin in cursor.fetchall():
+                recipients[admin['email']] = admin['first_name']
 
-                # Send emails to all unique recipients
-                if recipients:
-                    formatted_date = f"{ticket.due_date.strftime('%b')} {ticket.due_date.day}, {ticket.due_date.year}" if ticket.due_date else 'N/A'
-                    subject = f"New Ticket: {ticket.title}"
-                    
-                    for email, first_name in recipients.items():
-                        context = {
-                            "subject": subject,
-                            "message": (
-                                f"Hello {first_name},<br><br>"
-                                f"A new ticket has been opened: <b>{ticket.title}</b>.<br><br>"
-                                f"<b>Ticket No:</b> {ticket_no}<br>"
-                                f"<b>Project:</b> {ticket.project_name}<br>"
-                                f"<b>Due Date:</b> {formatted_date}"
-                            ),
-                        }
-                        EmailService.send_email(email, subject, "email_template.html", context)
+            # Send emails to all unique recipients
+            if recipients:
+                formatted_date = f"{ticket.due_date.strftime('%b')} {ticket.due_date.day}, {ticket.due_date.year}" if ticket.due_date else 'N/A'
+                subject = f"New Ticket: {ticket.title}"
+                
+                for email, first_name in recipients.items():
+                    context = {
+                        "subject": subject,
+                        "message": (
+                            f"Hello {first_name},<br><br>"
+                            f"A new ticket has been opened: <b>{ticket.title}</b>.<br><br>"
+                            f"<b>Ticket No:</b> {ticket_no}<br>"
+                            f"<b>Project:</b> {ticket.project_name}<br>"
+                            f"<b>Due Date:</b> {formatted_date}"
+                        ),
+                    }
+                    EmailService.send_email(email, subject, "email_template.html", context)
                 
             return TicketService.get_ticket_internal(cursor, ticket_id)
 

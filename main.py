@@ -1,3 +1,18 @@
+import os
+from dotenv import load_dotenv
+
+# Load environment variables based on APP_ENV
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+app_env = os.getenv("APP_ENV", "env")
+
+if app_env == "production":
+    if os.path.exists(os.path.join(BASE_DIR, ".env")):
+        load_dotenv(dotenv_path=os.path.join(BASE_DIR, ".env"))
+elif app_env == "local":
+    load_dotenv(dotenv_path=os.path.join(BASE_DIR, ".env.local"))
+else:
+    load_dotenv(dotenv_path=os.path.join(BASE_DIR, ".env.dev"))
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError

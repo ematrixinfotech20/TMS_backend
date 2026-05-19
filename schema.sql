@@ -94,7 +94,7 @@ INSERT IGNORE INTO actions (id, name) VALUES
 -- Insert functionalities
 INSERT IGNORE INTO functionalities (name) VALUES
 ('manage user'),
-('manage status'),
+('manage ticket status'),
 ('manage department'),
 ('manage tickets'),
 ('manage project');
@@ -103,7 +103,7 @@ INSERT IGNORE INTO functionalities (name) VALUES
 -- Assuming functionality 'manage user' is 1
 INSERT IGNORE INTO modules (id, functionality_id, name) VALUES 
 (1, 1, 'Users List'),
-(2, 4, 'Tickets List');
+(2, 4, 'Tickets');
 
 -- Module Actions mapped
 INSERT IGNORE INTO modules_actions (module_id, action_id) VALUES
@@ -124,7 +124,7 @@ CREATE TABLE IF NOT EXISTS status (
 
 -- Insert module for status and its actions
 INSERT IGNORE INTO modules (id, functionality_id, name) 
-SELECT 4, id, 'Status List' FROM functionalities WHERE name = 'manage status';
+SELECT 4, id, 'Status List' FROM functionalities WHERE name = 'manage ticket status';
 
 INSERT IGNORE INTO modules_actions (module_id, action_id) VALUES
 (4, 1), (4, 2), (4, 3), (4, 4);

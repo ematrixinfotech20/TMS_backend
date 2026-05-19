@@ -104,13 +104,16 @@ class TicketCommentService:
                     if assigned_roles_map.get(current_user_id) == 3:
                         visible = True
                 elif type_id == 4: # Private for manager
-                    if assigned_roles_map.get(current_user_id) == 4:
+                    if assigned_roles_map.get(current_user_id) == 5:
                         visible = True
                     elif user_is_manager and current_user_id in assigned_roles_map:
                         # User is a manager in hierarchy and is assigned to ticket
                         visible = True
                 elif type_id == 5: # Admin only
                     if is_admin:
+                        visible = True
+                elif type_id == 6: # Private for Developer , Manager and Admins
+                    if assigned_roles_map.get(current_user_id) == 2 or assigned_roles_map.get(current_user_id) == 5 or is_admin:
                         visible = True
                 
                 if visible:
@@ -187,6 +190,18 @@ class TicketCommentService:
             # Usually Admin only means all admins see it.
             cursor.execute("SELECT id as assign_to, role_id, email, first_name FROM users WHERE role_id = 1")
             recipients.extend(cursor.fetchall())
+        elif type_id == 6: # Private for Developer , Manager and Admins
+            devs = [u for u in assigned_users if u['role_id'] == 2]
+            recipients.extend(devs)
+            managers_by_role = [u for u in assigned_users if u['role_id'] == 5]
+            recipients.extend(managers_by_role)
+            cursor.execute("SELECT id as assign_to, role_id, email, first_name FROM users WHERE role_id = 1")
+            recipients.extend(cursor.fetchall())
+            
+            # Assigned users who have subordinates
+            for u in assigned_users:
+                if TicketCommentService.is_user_a_manager(cursor, u['assign_to']):
+                    recipients.append(u)
         
         # Unique recipients by email
         seen_emails = set()
@@ -199,7 +214,7 @@ class TicketCommentService:
         # Send emails
         for r in unique_recipients:
             subject = f"New Comment on Ticket: {ticket_title}"
-            message = f"Hello {r['first_name']}<br><br>A new comment has been added to ticket <b>{ticket_title}</b> ({comment['comment_type_name']}):<br><br><i>{comment['comment']}</i>"
+            message = f"Hello {r['first_name']}<br><br>A new comment has been added to ticket <b>{ticket_title}</b><br><br><i>{comment['comment']}</i>"
             context = {"subject": subject, "message": message}
             EmailService.send_email(r['email'], subject, "email_template.html", context)
 
