@@ -56,16 +56,16 @@ class AuthService:
             if not user:
                 raise HTTPException(status_code=404, detail="Invalid token/email")
                 
-            hashed_password = get_password_hash(req.new_password)
+            # hashed_password = get_password_hash(req.new_password)
             sql = "UPDATE users SET password_hash=%s, is_active=True WHERE id=%s"
-            cursor.execute(sql, (hashed_password, user_id))
+            cursor.execute(sql, (req.new_password, user_id))
             db.commit()
         return {"message": "Password set successfully. You can now login."}
 
     @staticmethod
     def login(req: UserLogin, db):
         with db.cursor() as cursor:
-            cursor.execute("SELECT id, role_id, first_name, last_name, password_hash, is_active FROM users WHERE email=%s", (req.email,))
+            cursor.execute("SELECT id, role_id, first_name, last_name, password_hash, is_active FROM users WHERE email=%s AND password_hash=%s", (req.email, req.password))
             user = cursor.fetchone()
             if not user or not user.get('password_hash'):
                 return {"data": None, "message": "Invalid credentials", "status": 400}
@@ -73,8 +73,8 @@ class AuthService:
             if not user['is_active']:
                 return {"data": None, "message": "Account not active", "status": 400}
                 
-            if not verify_password(req.password, user['password_hash']):
-                return {"data": None, "message": "Invalid credentials", "status": 400}
+            # if not verify_password(req.password, user['password_hash']):
+            #     return {"data": None, "message": "Invalid credentials", "status": 400}
                 
             # Build permissions object
             cursor.execute("SELECT name FROM roles WHERE id=%s", (user['role_id'],))

@@ -17,8 +17,10 @@ app_env = os.getenv("APP_ENV", "env")
 if app_env == "local":
     load_dotenv(dotenv_path=os.path.join(BASE_DIR, ".env.local"), override=True)
 else:
-    load_dotenv(dotenv_path=os.path.join(BASE_DIR, ".env.dev"), override=True)
-    
+    load_dotenv(dotenv_path=os.path.join(BASE_DIR, ".env.prod"), override=True)
+
+import logging
+logger = logging.getLogger(__name__)    
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -64,7 +66,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
-    print(f"Internal Error: {exc}") # Log it for debugging
+    logger.info(f"Internal Error: {exc}") # Log it for debugging
     return JSONResponse(
         status_code=500,
         content={"status": 500, "message": "An internal server error occurred", "result": None}
@@ -72,9 +74,11 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 app.include_router(api_router)
 
-@app.get("/")
+@app.get("/test")
 def read_root():
-    return success_response(None, "TMS API is running. Check /docs.")
+    return success_response(None, "TMS API is running.")
 
 # .\venv\Scripts\activate
-# uvicorn main:app --reload --host 0.0.0.0 --port 8000
+# uvicorn main:app --reload --host 0.0.0.0 --port 5000
+# for /d /r "C:\Jay\TMS\backend" %i in (__pycache__) do @if exist "%i" rd /s /q "%i"
+# tail -f /devwebapp_desk_ematrix/webroot/desk.ematrixinfotech.com/py/logs/tms.log

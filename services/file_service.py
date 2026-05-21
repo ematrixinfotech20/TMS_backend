@@ -2,6 +2,9 @@ import os
 import shutil
 from PIL import Image
 
+import logging
+logger = logging.getLogger(__name__)
+
 # Increase pixel limit for large images to avoid DecompressionBombWarning
 Image.MAX_IMAGE_PIXELS = None
 
@@ -44,7 +47,7 @@ class FileService:
                     
                 return out_path
         except Exception as e:
-            print(f"Error optimizing image: {e}")
+            logger.info(f"Error optimizing image: {e}")
             return input_path
 
     @staticmethod
@@ -54,7 +57,7 @@ class FileService:
             if os.path.exists(base_cleanup_path) and not os.listdir(base_cleanup_path):
                 shutil.rmtree(base_cleanup_path)
         except Exception as e:
-            print(f"Error cleaning empty directory {base_cleanup_path}: {e}")
+            logger.info(f"Error cleaning empty directory {base_cleanup_path}: {e}")
 
     @staticmethod
     def get_upload_path(rel_path: str = None) -> str:

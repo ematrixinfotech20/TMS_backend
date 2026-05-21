@@ -3,6 +3,8 @@ from services.file_service import FileService
 import os
 import shutil
 
+import logging
+logger = logging.getLogger(__name__)
 
 class CompanyService:
 
@@ -120,7 +122,7 @@ class CompanyService:
             try:
                 os.remove(file_path)
             except Exception as e:
-                print(f"Error removing original file: {e}")
+                logger.info(f"Error removing original file: {e}")
             return f"/{rel_path}/{actual_file_name}"
 
         return f"/{rel_path}/{file_name}"
@@ -144,7 +146,7 @@ class CompanyService:
                     if os.path.exists(logo_dir):
                         shutil.rmtree(logo_dir)
                 except Exception as e:
-                    print(f"Error deleting logo files: {e}")
+                    logger.info(f"Error deleting logo files: {e}")
 
     @staticmethod
     def create(company_name, email, phone, address, city, state, country, zip_code, logo_file, user_id, db):

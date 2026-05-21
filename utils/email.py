@@ -4,6 +4,9 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from jinja2 import Environment, FileSystemLoader
 
+import logging
+logger = logging.getLogger(__name__)
+
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 SENDER_EMAIL = "webzoidsolution@gmail.com"
@@ -14,7 +17,7 @@ TEMPLATE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templat
 try:
     env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
 except Exception as e:
-    print(f"Error loading template directory: {e}")
+    logger.info(f"Error loading template directory: {e}")
     env = None
 
 def send_email(to_email: str, subject: str, template_name: str, context: dict):
@@ -29,7 +32,7 @@ def send_email(to_email: str, subject: str, template_name: str, context: dict):
             html_body = template.render(context)
             msg.attach(MIMEText(html_body, 'html'))
         except Exception as e:
-            print(f"Error rendering template: {e}")
+            logger.info(f"Error rendering template: {e}")
             # Fallback to plain text if rendering fails
             msg.attach(MIMEText(str(context), 'plain'))
     else:
@@ -42,6 +45,6 @@ def send_email(to_email: str, subject: str, template_name: str, context: dict):
         server.login(SENDER_EMAIL, SENDER_PASSWORD)
         server.sendmail(SENDER_EMAIL, to_email, msg.as_string())
         server.quit()
-        print(f"Email successfully sent to {to_email}")
+        logger.info(f"Email successfully sent to {to_email}")
     except Exception as e:
-        print(f"Failed to send email to {to_email}: {e}")
+        logger.info(f"Failed to send email to {to_email}: {e}")

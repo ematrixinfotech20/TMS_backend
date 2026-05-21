@@ -6,6 +6,9 @@ import jwt
 import os
 import shutil
 
+import logging
+logger = logging.getLogger(__name__)
+
 def get_current_user_id(authorization: str = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
         return None
@@ -464,7 +467,7 @@ class TicketService:
                                 ticket_dir = os.path.dirname(attachments_dir)
                                 ticket_dirs_to_remove.add(ticket_dir)
                         except Exception as e:
-                            print(f"Error deleting file {file_path}: {e}")
+                            logger.info(f"Error deleting file {file_path}: {e}")
             
             # Cleanup parent directories if they are now empty
             for t_dir in ticket_dirs_to_remove:

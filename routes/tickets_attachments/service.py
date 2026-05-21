@@ -3,6 +3,9 @@ from services.file_service import FileService
 import os
 import shutil
 
+import logging
+logger = logging.getLogger(__name__)
+
 class TicketsAttachmentsService:
 
     @staticmethod
@@ -56,7 +59,7 @@ class TicketsAttachmentsService:
                     try:
                         os.remove(file_path)
                     except Exception as e:
-                        print(f"Error removing original file: {e}")
+                        logger.info(f"Error removing original file: {e}")
 
                 cursor.execute("UPDATE tickets_attachments SET file_URL=%s, file_name=%s WHERE id=%s", (file_url, actual_file_name, attachment_id))
                 db.commit()
@@ -90,4 +93,4 @@ class TicketsAttachmentsService:
                         if not os.listdir(att_dir):
                             shutil.rmtree(att_dir)
                     except Exception as e:
-                        print(f"Error deleting file {file_path}: {e}")
+                        logger.info(f"Error deleting file {file_path}: {e}")

@@ -2,6 +2,8 @@ import pymysql
 import pymysql.cursors
 from typing import Generator
 import os
+import logging
+logger = logging.getLogger(__name__)
 
 # Database configuration (should use env vars in production)
 DB_HOST = os.getenv("DB_HOST")
@@ -17,6 +19,7 @@ def get_db_connection():
         database=DB_NAME,
         cursorclass=pymysql.cursors.DictCursor
     )
+    logger.debug(" === Database connection established === ")
     return connection
 
 def get_db() -> Generator:

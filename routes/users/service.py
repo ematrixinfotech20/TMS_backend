@@ -1,5 +1,9 @@
+import os
+import secrets
+import string
 from fastapi import HTTPException
-from core.security import get_password_hash
+from core.security import get_password_hash, get_password_encrypted, decrypt_password
+from services.email_service import EmailService
 
 class UserService:  
     @staticmethod
@@ -49,6 +53,18 @@ class UserService:
     def get_all_users(db):
         with db.cursor() as cursor:
             cursor.execute("SELECT * FROM users ORDER BY id DESC")
+            users = cursor.fetchall()
+            return users
+
+    @staticmethod
+    def filter_users(db, role_ids=None):
+        with db.cursor() as cursor:
+            if role_ids:
+                placeholders = ", ".join(["%s"] * len(role_ids))
+                query = f"SELECT * FROM users WHERE role_id IN ({placeholders}) ORDER BY id DESC"
+                cursor.execute(query, tuple(role_ids))
+            else:
+                cursor.execute("SELECT * FROM users ORDER BY id DESC")
             users = cursor.fetchall()
             return users
 
@@ -105,7 +121,8 @@ class UserService:
             if cursor.fetchone():
                 raise HTTPException(status_code=400, detail="Email already registered")
                 
-            hashed_pw = get_password_hash(user.password)
+            # hashed_pw = get_password_hash(user.password)
+            hashed_pw = user.password
             
             sql = """
                 INSERT INTO users 
@@ -140,7 +157,9 @@ class UserService:
                 raise HTTPException(status_code=400, detail="No valid fields to update")
 
             if "password" in update_data:
-                update_data["password_hash"] = get_password_hash(update_data.pop("password"))
+                # update_data["password_hash"] = get_password_hash(update_data.pop("password"))
+                update_data["password_hash"] = update_data.pop("password")
+
 
             set_clauses = [f"{key} = %s" for key in update_data.keys()]
             values = list(update_data.values())
@@ -163,4 +182,37 @@ class UserService:
                 
             cursor.execute("DELETE FROM users WHERE id=%s", (user_id,))
             db.commit()
+            return True
+
+
+    @staticmethod
+    def send_login_credentials(user_id: int, db):
+        with db.cursor() as cursor:
+            cursor.execute("SELECT id, first_name, email, password_hash FROM users WHERE id=%s", (user_id,))
+            user = cursor.fetchone()
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")                    
+        
+            settings_site_url = os.getenv("SITE_URL", "http://localhost:5173")
+            subject = "Your TMS Account Login Credentials"
+            
+            message_body = (
+                f"Hello {user.get('first_name', '')},<br><br>"
+                "An administrator has retrieved your login credentials for your Ticket Management System (TMS) account.<br><br>"
+                "Please use the following credentials to login:<br>"
+                f"<strong>Email Address:</strong> {user['email']}<br>"
+                f"<strong>Password:</strong> {user['password_hash']}<br><br>"
+                "If you have forgotten your password or need further assistance, please contact your administrator."
+            )
+            
+            context = {
+                "subject": subject,
+                "title": "Welcome to TMS!",
+                "message": message_body,
+                "action_link": f"{settings_site_url}/login",
+                "action_text": "Login Now"
+            }
+            
+            EmailService.send_email(user['email'], subject, "email_template.html", context)
+            
             return True

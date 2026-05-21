@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Query
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 from database import get_db
@@ -80,6 +80,11 @@ def get_all_users(db=Depends(get_db)):
     result = UserService.get_all_users(db)
     return success_response(result, "Users fetched successfully")
 
+@router.get("/filter", response_model=APIResponse[List[UserResponse]])
+def filter_users(role_ids: Optional[List[int]] = Query(None), db=Depends(get_db)):
+    result = UserService.filter_users(db, role_ids)
+    return success_response(result, "Users filtered successfully")
+
 @router.get("/customers", response_model=APIResponse[List[UserResponse]])
 def get_customers(db=Depends(get_db)):
     result = UserService.get_customers(db)
@@ -114,3 +119,8 @@ def update_user(user_id: int, user_update: UserUpdate, db=Depends(get_db)):
 def delete_user(user_id: int, db=Depends(get_db)):
     UserService.delete_user(user_id, db)
     return success_response(None, "User deleted successfully", 204)
+
+@router.post("/{user_id}/send-credentials", response_model=APIResponse[bool])
+def send_login_credentials(user_id: int, db=Depends(get_db)):
+    result = UserService.send_login_credentials(user_id, db)
+    return success_response(result, "Credentials email sent successfully")

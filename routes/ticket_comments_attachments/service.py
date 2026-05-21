@@ -40,8 +40,7 @@ class TicketCommentAttachmentsService:
                 db.commit()
                 attachment_id = cursor.lastrowid
             
-            # Path: /frontend/public/usercontent/[user_id]/ticket/[ticket_id]/attachments/[attachment_id]/comments/[comment_id]/
-            rel_path = f"usercontent/{u_id}/ticket/{ticket_id}/attachments/{attachment_id}/comments/{comment_id}"
+            rel_path = f"usercontent/{u_id}/ticket/{ticket_id}/attachments/comments/{comment_id}/{attachment_id}"
             target_dir = FileService.get_upload_path(rel_path)
             
             os.makedirs(target_dir, exist_ok=True)
