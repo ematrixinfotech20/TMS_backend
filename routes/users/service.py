@@ -50,9 +50,12 @@ class UserService:
         return hierarchy
             
     @staticmethod
-    def get_all_users(db):
+    def get_all_users(db, company_id=None):
         with db.cursor() as cursor:
-            cursor.execute("SELECT * FROM users ORDER BY id DESC")
+            if company_id is not None:
+                cursor.execute("SELECT * FROM users WHERE company_id = %s ORDER BY id DESC", (company_id,))
+            else:
+                cursor.execute("SELECT * FROM users ORDER BY id DESC")
             users = cursor.fetchall()
             return users
 
@@ -69,14 +72,22 @@ class UserService:
             return users
 
     @staticmethod
-    def get_customers(db):
+    def get_customers(db, company_id=None):
         with db.cursor() as cursor:
-            cursor.execute("""
-                SELECT * FROM users u
-                JOIN roles r ON u.role_id = r.id
-                WHERE r.name = 'Customer' AND u.is_active = true
-                ORDER BY u.id DESC
-            """)
+            if company_id is not None:
+                cursor.execute("""
+                    SELECT * FROM users u
+                    JOIN roles r ON u.role_id = r.id
+                    WHERE r.name = 'Customer' AND u.is_active = true AND u.company_id = %s
+                    ORDER BY u.id DESC
+                """, (company_id,))
+            else:
+                cursor.execute("""
+                    SELECT * FROM users u
+                    JOIN roles r ON u.role_id = r.id
+                    WHERE r.name = 'Customer' AND u.is_active = true
+                    ORDER BY u.id DESC
+                """)
             customers = cursor.fetchall()
             return customers
 

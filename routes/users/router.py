@@ -76,8 +76,8 @@ def get_user_hierarchy(db=Depends(get_db)):
     return success_response(result, "User hierarchy fetched successfully")
 
 @router.get("", response_model=APIResponse[List[UserResponse]])
-def get_all_users(db=Depends(get_db)):
-    result = UserService.get_all_users(db)
+def get_all_users(company_id: Optional[int] = Query(None), db=Depends(get_db)):
+    result = UserService.get_all_users(db, company_id)
     return success_response(result, "Users fetched successfully")
 
 @router.get("/filter", response_model=APIResponse[List[UserResponse]])
@@ -86,8 +86,8 @@ def filter_users(role_ids: Optional[List[int]] = Query(None), db=Depends(get_db)
     return success_response(result, "Users filtered successfully")
 
 @router.get("/customers", response_model=APIResponse[List[UserResponse]])
-def get_customers(db=Depends(get_db)):
-    result = UserService.get_customers(db)
+def get_customers(company_id: Optional[int] = Query(None), db=Depends(get_db)):
+    result = UserService.get_customers(db, company_id)
     return success_response(result, "Customers fetched successfully")
 
 @router.get("/get/all/admins", response_model=APIResponse[List[UserResponse]])
