@@ -7,16 +7,24 @@ class ProjectService:
         conn = get_db_connection()
         try:
             with conn.cursor() as cursor:
-                cursor.execute("SELECT id, first_name, last_name FROM users WHERE id = %s", (project.client_id,))
+                cursor.execute("SELECT id, first_name, last_name, company_id FROM users WHERE id = %s", (project.client_id,))
                 client = cursor.fetchone()
                 if not client:
                     raise HTTPException(status_code=400, detail="Invalid client_id. User does not exist.")
                 
+                company_id = client.get('company_id')
+                company_name = None
+                if company_id:
+                    cursor.execute("SELECT company_name FROM companies WHERE id = %s", (company_id,))
+                    company_row = cursor.fetchone()
+                    if company_row:
+                        company_name = company_row['company_name']
+
                 cursor.execute("SELECT id FROM projects WHERE name = %s", (project.name,))
                 if cursor.fetchone():
                     raise HTTPException(status_code=400, detail="Project with this name already exists")
                 
-                cursor.execute("INSERT INTO projects (name, client_id, project_type) VALUES (%s, %s, %s)", (project.name, project.client_id, project.project_type))
+                cursor.execute("INSERT INTO projects (name, client_id, project_type, company_id) VALUES (%s, %s, %s, %s)", (project.name, project.client_id, project.project_type, company_id))
                 conn.commit()
                 new_id = cursor.lastrowid
                 
@@ -27,6 +35,8 @@ class ProjectService:
                     "client_id": project.client_id, 
                     "project_type": project.project_type,
                     "client_name": client_name,
+                    "company_id": company_id,
+                    "company_name": company_name,
                     "ticket_count": 0,
                     "ticket_titles": []
                 }
@@ -51,12 +61,15 @@ class ProjectService:
                         p.client_id,
                         u.first_name,
                         u.last_name,
+                        p.company_id,
+                        c.company_name,
                         COUNT(t.id) AS ticket_count,
                         GROUP_CONCAT(t.title SEPARATOR '|') AS ticket_titles
                     FROM projects p
                     LEFT JOIN users u ON p.client_id = u.id
+                    LEFT JOIN companies c ON p.company_id = c.id
                     LEFT JOIN tickets t ON t.project_id = p.id
-                    GROUP BY p.id, p.name, p.client_id, u.first_name, u.last_name
+                    GROUP BY p.id, p.name, p.client_id, u.first_name, u.last_name, p.company_id, c.company_name
                     ORDER BY p.id DESC
                 """)
                 results = cursor.fetchall()
@@ -78,6 +91,8 @@ class ProjectService:
                         "client_id": row['client_id'],
                         "project_type": row['project_type'],
                         "client_name": client_name,
+                        "company_id": row['company_id'],
+                        "company_name": row['company_name'],
                         "ticket_count": row['ticket_count'],
                         "ticket_titles": ticket_titles   # always a list
                     })
@@ -102,13 +117,16 @@ class ProjectService:
                         p.client_id, 
                         u.first_name, 
                         u.last_name,
+                        p.company_id,
+                        c.company_name,
                         COUNT(t.id) AS ticket_count,
                         GROUP_CONCAT(t.title SEPARATOR '|') AS ticket_titles
                     FROM projects p 
                     LEFT JOIN users u ON p.client_id = u.id 
+                    LEFT JOIN companies c ON p.company_id = c.id
                     LEFT JOIN tickets t ON t.project_id = p.id
                     WHERE p.id = %s
-                    GROUP BY p.id, p.name, p.client_id, u.first_name, u.last_name
+                    GROUP BY p.id, p.name, p.client_id, u.first_name, u.last_name, p.company_id, c.company_name
                 """, (project_id,))
                 row = cursor.fetchone()
                 if not row:
@@ -128,6 +146,8 @@ class ProjectService:
                     "client_id": row['client_id'],
                     "project_type": row['project_type'],
                     "client_name": client_name,
+                    "company_id": row['company_id'],
+                    "company_name": row['company_name'],
                     "ticket_count": row['ticket_count'],
                     "ticket_titles": ticket_titles
                 }
@@ -147,16 +167,24 @@ class ProjectService:
                 if not cursor.fetchone():
                     raise HTTPException(status_code=404, detail="Project not found")
                     
-                cursor.execute("SELECT id, first_name, last_name FROM users WHERE id = %s", (project.client_id,))
+                cursor.execute("SELECT id, first_name, last_name, company_id FROM users WHERE id = %s", (project.client_id,))
                 client = cursor.fetchone()
                 if not client:
                     raise HTTPException(status_code=400, detail="Invalid client_id. User does not exist.")
                 
+                company_id = client.get('company_id')
+                company_name = None
+                if company_id:
+                    cursor.execute("SELECT company_name FROM companies WHERE id = %s", (company_id,))
+                    company_row = cursor.fetchone()
+                    if company_row:
+                        company_name = company_row['company_name']
+
                 cursor.execute("SELECT id FROM projects WHERE name = %s AND id != %s", (project.name, project_id))
                 if cursor.fetchone():
                     raise HTTPException(status_code=400, detail="Another project with this name already exists")
                 
-                cursor.execute("UPDATE projects SET name = %s, client_id = %s, project_type = %s WHERE id = %s", (project.name, project.client_id, project.project_type, project_id))
+                cursor.execute("UPDATE projects SET name = %s, client_id = %s, project_type = %s, company_id = %s WHERE id = %s", (project.name, project.client_id, project.project_type, company_id, project_id))
                 conn.commit()
                 
                 client_name = f"{client['first_name']} {client['last_name']}".strip()
@@ -174,6 +202,8 @@ class ProjectService:
                     "client_id": project.client_id, 
                     "project_type": project.project_type,
                     "client_name": client_name,
+                    "company_id": company_id,
+                    "company_name": company_name,
                     "ticket_count": ticket_count,
                     "ticket_titles": ticket_titles
                 }

@@ -24,9 +24,10 @@ class TicketService:
     @staticmethod
     def get_ticket_internal(cursor, ticket_id):
         sql = """
-            SELECT t.*, s.name as status_name 
+            SELECT t.*, s.name as status_name, p.name as project_name
             FROM tickets t
             LEFT JOIN status s ON t.status_id = s.id
+            LEFT JOIN projects p ON t.project_id = p.id
             WHERE t.id = %s
         """
         cursor.execute(sql, (ticket_id,))
@@ -34,24 +35,44 @@ class TicketService:
         if not ticket:
             return None
             
-        cursor.execute("SELECT assign_to FROM assigned_tickets WHERE ticket_id=%s", (ticket_id,))
-        assignees = [r['assign_to'] for r in cursor.fetchall()]
+        cursor.execute("SELECT assign_to, send_mail FROM assigned_tickets WHERE ticket_id=%s", (ticket_id,))
+        assignees_rows = cursor.fetchall()
         
         cursor.execute("SELECT id, file_name, file_URL, created_by, created_date FROM tickets_attachments WHERE ticket_id=%s", (ticket_id,))
         attachments = cursor.fetchall()
         
         ticket_dict = dict(ticket)
+        # Fetch parent ticket info if exists
+        if ticket_dict.get('parent_ticket_id'):
+            cursor.execute("SELECT ticket_no, title FROM tickets WHERE id = %s", (ticket_dict['parent_ticket_id'],))
+            parent_res = cursor.fetchone()
+            if parent_res:
+                ticket_dict['parent_ticket_no'] = parent_res['ticket_no']
+                ticket_dict['parent_ticket_title'] = parent_res['title']
+            else:
+                ticket_dict['parent_ticket_no'] = None
+                ticket_dict['parent_ticket_title'] = None
+        else:
+            ticket_dict['parent_ticket_no'] = None
+            ticket_dict['parent_ticket_title'] = None
+
         # Convert as_customer and for_customer from 1/0 to bool
         ticket_dict['as_customer'] = bool(ticket_dict.get('as_customer', False))
         ticket_dict['for_customer'] = bool(ticket_dict.get('for_customer', False))
-        if len(assignees) > 0:
+        if len(assignees_rows) > 0:
             users = []
-            for assign in assignees:
+            for row in assignees_rows:
+                assign = row['assign_to']
+                send_mail_val = row['send_mail'] or 'Y'
                 sql = "SELECT id, first_name, last_name FROM users WHERE id = %s"
                 cursor.execute(sql, (int(assign),))
                 assignee = cursor.fetchone()
                 if assignee:
-                    user = {"id": int(assignee['id']), "name": f"{assignee['first_name']} {assignee['last_name']}"}
+                    user = {
+                        "id": int(assignee['id']),
+                        "name": f"{assignee['first_name']} {assignee['last_name']}",
+                        "send_mail": send_mail_val
+                    }
                     users.append(user)
             ticket_dict['assignees'] = users
         else:
@@ -165,16 +186,23 @@ class TicketService:
             else:
                 prefix = ticket.project_name
             
+            if ticket.owner_id:
+                cursor.execute("SELECT id FROM users WHERE id = %s", (ticket.owner_id,))
+                owner = cursor.fetchone()
+                if not owner:
+                    raise HTTPException(status_code=400, detail="Owner user not found")
+                current_user_id = owner['id']
+
             cursor.execute("SELECT COUNT(*) as count FROM tickets WHERE project_id = %s", (ticket.project_id,))
             sn = (cursor.fetchone()['count'] or 0) + 1
             ticket_no = f"{prefix}-{sn:02d}"
 
             sql = """
-                INSERT INTO tickets (ticket_no, project_id, department_id, title, description, due_date, working_hours, as_customer, for_customer, status_id, created_by)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO tickets (parent_ticket_id, ticket_no, project_id, department_id, title, description, due_date, working_hours, as_customer, for_customer, status_id, created_by)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
             cursor.execute(sql, (
-                ticket_no, ticket.project_id, ticket.department_id, ticket.title, ticket.description, ticket.due_date, ticket.working_hours, 
+                ticket.parent_ticket_id, ticket_no, ticket.project_id, ticket.department_id, ticket.title, ticket.description, ticket.due_date, ticket.working_hours,
                 ticket.as_customer, ticket.for_customer, ticket.status_id, current_user_id
             ))
             db.commit()
@@ -185,28 +213,30 @@ class TicketService:
 
             # Handle assignees
             if ticket.assignees:
-                assignee_vals = [(ticket_id, uid, current_user_id) for uid in ticket.assignees]
+                assignee_vals = [(ticket_id, assignee.id, current_user_id, assignee.send_mail) for assignee in ticket.assignees]
                 cursor.executemany(
-                    "INSERT INTO assigned_tickets (ticket_id, assign_to, created_by) VALUES (%s, %s, %s)",
+                    "INSERT INTO assigned_tickets (ticket_id, assign_to, created_by, send_mail) VALUES (%s, %s, %s, %s)",
                     assignee_vals
                 )
                 db.commit()
+                send_mail_uids = [assignee.id for assignee in ticket.assignees if assignee.send_mail == 'Y']
             else:
                 cursor.execute("SELECT id FROM users WHERE role_id = 1")
                 assignees = cursor.fetchall()
-                ticket.assignees = [uid for uid in assignees]
-                assignee_vals = [(ticket_id, uid['id'], current_user_id) for uid in assignees]
+                assignee_vals = [(ticket_id, uid['id'], current_user_id, 'Y') for uid in assignees]
                 cursor.executemany(
-                    "INSERT INTO assigned_tickets (ticket_id, assign_to, created_by) VALUES (%s, %s, %s)",
+                    "INSERT INTO assigned_tickets (ticket_id, assign_to, created_by, send_mail) VALUES (%s, %s, %s, %s)",
                     assignee_vals
                 )
                 db.commit()
+                send_mail_uids = [uid['id'] for uid in assignees]
 
             # Collect unique recipients for assignees
-            format_strings = ','.join(['%s'] * len(ticket.assignees))
-            cursor.execute(f"SELECT email, first_name FROM users WHERE id IN ({format_strings})", tuple(ticket.assignees))
-            for u in cursor.fetchall():
-                recipients[u['email']] = u['first_name']
+            if send_mail_uids:
+                format_strings = ','.join(['%s'] * len(send_mail_uids))
+                cursor.execute(f"SELECT email, first_name FROM users WHERE id IN ({format_strings})", tuple(send_mail_uids))
+                for u in cursor.fetchall():
+                    recipients[u['email']] = u['first_name']
 
             # 2. Add Project Client
             cursor.execute("SELECT u.email, u.first_name FROM users u JOIN projects p ON u.id = p.client_id WHERE p.id = %s", (ticket.project_id,))
@@ -283,15 +313,22 @@ class TicketService:
                 
             cursor.execute("SELECT assign_to FROM assigned_tickets WHERE ticket_id=%s", (ticket_id,))
             old_assignees = set([r['assign_to'] for r in cursor.fetchall()])
-            new_assignees = set(ticket_update.assignees)
-                
+            new_assignees = set([assignee.id for assignee in ticket_update.assignees])
+
+            if ticket_update.owner_id:
+                cursor.execute("SELECT id FROM users WHERE id = %s", (ticket_update.owner_id,))
+                owner = cursor.fetchone()
+                if not owner:
+                    raise HTTPException(status_code=400, detail="Owner user not found")
+                current_user_id = owner['id']
+                                
             sql = """
                 UPDATE tickets
-                SET project_id=%s,department_id=%s, title=%s, description=%s, due_date=%s, working_hours=%s, as_customer=%s, for_customer=%s, status_id=%s
+                SET parent_ticket_id=%s, project_id=%s,department_id=%s, title=%s, description=%s, due_date=%s, working_hours=%s, as_customer=%s, for_customer=%s, status_id=%s
                 WHERE id=%s
             """
             cursor.execute(sql, (
-                ticket_update.project_id, ticket_update.department_id, ticket_update.title, ticket_update.description, ticket_update.due_date, ticket_update.working_hours,
+                ticket_update.parent_ticket_id, ticket_update.project_id, ticket_update.department_id, ticket_update.title, ticket_update.description, ticket_update.due_date, ticket_update.working_hours,
                 ticket_update.as_customer, ticket_update.for_customer, ticket_update.status_id, ticket_id
             ))
             
@@ -299,9 +336,9 @@ class TicketService:
             cursor.execute("DELETE FROM assigned_tickets WHERE ticket_id=%s", (ticket_id,))
             
             if ticket_update.assignees:
-                assignee_vals = [(ticket_id, uid, current_user_id) for uid in ticket_update.assignees]
+                assignee_vals = [(ticket_id, assignee.id, current_user_id, assignee.send_mail) for assignee in ticket_update.assignees]
                 cursor.executemany(
-                    "INSERT INTO assigned_tickets (ticket_id, assign_to, created_by) VALUES (%s, %s, %s)",
+                    "INSERT INTO assigned_tickets (ticket_id, assign_to, created_by, send_mail) VALUES (%s, %s, %s, %s)",
                     assignee_vals
                 )
                 
@@ -323,12 +360,15 @@ class TicketService:
                 if st_res:
                     new_status_name = st_res['name']
             
+            send_mail_prefs = {assignee.id: assignee.send_mail for assignee in ticket_update.assignees}
             new_assigned_users = list(new_assignees - old_assignees)
             new_assigned_users_emails = []
             
-            if new_assigned_users:
-                format_strings = ','.join(['%s'] * len(new_assigned_users))
-                cursor.execute(f"SELECT email, first_name FROM users WHERE id IN ({format_strings})", tuple(new_assigned_users))
+            new_assigned_users_to_notify = [uid for uid in new_assigned_users if send_mail_prefs.get(uid, 'Y') == 'Y']
+            
+            if new_assigned_users_to_notify:
+                format_strings = ','.join(['%s'] * len(new_assigned_users_to_notify))
+                cursor.execute(f"SELECT email, first_name FROM users WHERE id IN ({format_strings})", tuple(new_assigned_users_to_notify))
                 users_to_email = cursor.fetchall()
                 for u in users_to_email:
                     new_assigned_users_emails.append(u['email'])
@@ -341,36 +381,38 @@ class TicketService:
                     EmailService.send_email(u['email'], subject, "email_template.html", context)
                     
             if (due_date_changed or status_changed) and ticket_update.assignees:
-                format_strings = ','.join(['%s'] * len(ticket_update.assignees))
-                cursor.execute(f"SELECT email, first_name FROM users WHERE id IN ({format_strings})", tuple(ticket_update.assignees))
-                all_users_to_email = cursor.fetchall()
-                
-                for u in all_users_to_email:
-                    if u['email'] in new_assigned_users_emails:
-                        continue
-                        
-                    messages_parts = []
-                    if due_date_changed:
-                        old_date_formatted = f"None"
-                        if old_ticket['due_date']:
-                            if hasattr(old_ticket['due_date'], 'strftime'):
-                                old_date_formatted = f"{old_ticket['due_date'].strftime('%b')} {old_ticket['due_date'].day}, {old_ticket['due_date'].year}"
-                            else:
-                                old_date_formatted = str(old_ticket['due_date'])
-                                
-                        new_date_formatted = f"{ticket_update.due_date.strftime('%b')} {ticket_update.due_date.day}, {ticket_update.due_date.year}" if ticket_update.due_date else 'None'
-                        messages_parts.append(f"<b>Due Date:</b> <span style='text-decoration: line-through; color: red;'>{old_date_formatted}</span> <span style='color: green;'>{new_date_formatted}</span>")
-                    if status_changed:
-                        old_status = old_ticket['status_name'] if old_ticket['status_name'] else 'Unassigned'
-                        new_status = new_status_name if new_status_name else 'Unassigned'
-                        messages_parts.append(f"<b>Status:</b> <span style='text-decoration: line-through; color: red;'>{old_status}</span> <span style='color: green;'>{new_status}</span>")
+                uids_to_notify = [assignee.id for assignee in ticket_update.assignees if assignee.send_mail == 'Y']
+                if uids_to_notify:
+                    format_strings = ','.join(['%s'] * len(uids_to_notify))
+                    cursor.execute(f"SELECT email, first_name FROM users WHERE id IN ({format_strings})", tuple(uids_to_notify))
+                    all_users_to_email = cursor.fetchall()
                     
-                    subject = f"Ticket Update: {ticket_update.title}"
-                    context = {
-                        "subject": subject,
-                        "message": f"Hello {u['first_name']},<br><br>The following updates have been made to ticket <b>{ticket_update.title}</b>:<br><br>" + "<br><br>".join(messages_parts),
-                    }
-                    EmailService.send_email(u['email'], subject, "email_template.html", context)
+                    for u in all_users_to_email:
+                        if u['email'] in new_assigned_users_emails:
+                            continue
+                            
+                        messages_parts = []
+                        if due_date_changed:
+                            old_date_formatted = f"None"
+                            if old_ticket['due_date']:
+                                if hasattr(old_ticket['due_date'], 'strftime'):
+                                    old_date_formatted = f"{old_ticket['due_date'].strftime('%b')} {old_ticket['due_date'].day}, {old_ticket['due_date'].year}"
+                                else:
+                                    old_date_formatted = str(old_ticket['due_date'])
+                                    
+                            new_date_formatted = f"{ticket_update.due_date.strftime('%b')} {ticket_update.due_date.day}, {ticket_update.due_date.year}" if ticket_update.due_date else 'None'
+                            messages_parts.append(f"<b>Due Date:</b> <span style='text-decoration: line-through; color: red;'>{old_date_formatted}</span> <span style='color: green;'>{new_date_formatted}</span>")
+                        if status_changed:
+                            old_status = old_ticket['status_name'] if old_ticket['status_name'] else 'Unassigned'
+                            new_status = new_status_name if new_status_name else 'Unassigned'
+                            messages_parts.append(f"<b>Status:</b> <span style='text-decoration: line-through; color: red;'>{old_status}</span> <span style='color: green;'>{new_status}</span>")
+                        
+                        subject = f"Ticket Update: {ticket_update.title}"
+                        context = {
+                            "subject": subject,
+                            "message": f"Hello {u['first_name']},<br><br>The following updates have been made to ticket <b>{ticket_update.title}</b>:<br><br>" + "<br><br>".join(messages_parts),
+                        }
+                        EmailService.send_email(u['email'], subject, "email_template.html", context)
 
             return TicketService.get_ticket_internal(cursor, ticket_id)
 
@@ -488,3 +530,31 @@ class TicketService:
             cursor.execute("DELETE FROM tickets WHERE id=%s", (ticket_id,))
             db.commit()
             return True
+
+    @staticmethod
+    def update_assignee_send_mail(ticket_id: int, user_id: int, send_mail: str, db):
+        with db.cursor() as cursor:
+            cursor.execute("SELECT id FROM tickets WHERE id=%s", (ticket_id,))
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail="Ticket not found")
+            
+            cursor.execute("SELECT id FROM assigned_tickets WHERE ticket_id=%s AND assign_to=%s", (ticket_id, user_id))
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail="Assignee not found for this ticket")
+                
+            cursor.execute("UPDATE assigned_tickets SET send_mail=%s WHERE ticket_id=%s AND assign_to=%s", (send_mail, ticket_id, user_id))
+            db.commit()
+            
+            return TicketService.get_ticket_internal(cursor, ticket_id)
+
+    @staticmethod
+    def get_tickets_by_project(project_id: int, db):
+        with db.cursor() as cursor:
+            cursor.execute("SELECT id FROM tickets WHERE project_id = %s ORDER BY id DESC", (project_id,))
+            records = cursor.fetchall()
+            results = []
+            for record in records:
+                ticket_details = TicketService.get_ticket_internal(cursor, record['id'])
+                if ticket_details:
+                    results.append(ticket_details)
+            return results

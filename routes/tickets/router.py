@@ -11,8 +11,13 @@ router = APIRouter(prefix="/tickets", tags=["Tickets"])
 # -----------------
 # SCHEMAS
 # -----------------
+class AssigneeInput(BaseModel):
+    id: int
+    send_mail: str = "Y"
+
 class TicketCreate(BaseModel):
     project_id: int
+    parent_ticket_id: Optional[int] = None
     project_name: str
     department_id: Optional[int] = None
     title: str = Field(..., min_length=1)
@@ -22,10 +27,12 @@ class TicketCreate(BaseModel):
     as_customer: Optional[bool] = False
     for_customer: Optional[bool] = False
     status_id: Optional[int] = None
-    assignees: List[int] = Field(..., min_length=1)
+    assignees: List[AssigneeInput] = Field(..., min_length=1)
+    owner_id: Optional[int] = None
 
 class TicketUpdate(BaseModel):
     project_id: int
+    parent_ticket_id: Optional[int] = None
     department_id: Optional[int] = None
     title: str = Field(..., min_length=1)
     description: Optional[str] = None
@@ -34,7 +41,8 @@ class TicketUpdate(BaseModel):
     as_customer: Optional[bool] = False
     for_customer: Optional[bool] = False
     status_id: Optional[int] = None
-    assignees: List[int] = Field(..., min_length=1)
+    assignees: List[AssigneeInput] = Field(..., min_length=1)
+    owner_id: Optional[int] = None
 
 class TicketStatusUpdate(BaseModel):
     status_id: int
@@ -45,11 +53,16 @@ class TicketTitleUpdate(BaseModel):
 class AssigneeResponse(BaseModel):
     id: int
     name: str
+    send_mail:str
 
 class TicketResponse(BaseModel):
     id: int
+    parent_ticket_id: Optional[int] = None
+    parent_ticket_no: Optional[str] = None
+    parent_ticket_title: Optional[str] = None
     ticket_no: Optional[str] = None
     project_id: int
+    project_name: Optional[str] = None
     department_id: Optional[int] = None
     title: str
     description: Optional[str]
@@ -64,6 +77,7 @@ class TicketResponse(BaseModel):
     status_name: Optional[str] = None
     assignees: List[AssigneeResponse] = []
     attachments: List[dict] = []
+    owner_id: Optional[int] = None
 
 # Add this schema near the other Pydantic models
 class TicketFilter(BaseModel):
@@ -73,11 +87,20 @@ class TicketFilter(BaseModel):
     endDueDate: Optional[datetime] = None,
     search: Optional[str] = None
 
+class TicketAssigneeMailUpdate(BaseModel):
+    user_id: int
+    send_mail: str
+
 # Add this route after the existing ones
 @router.post("/filter", response_model=APIResponse[List[TicketResponse]])
 def filter_tickets(filter: TicketFilter, db=Depends(get_db), current_user_id: int = Depends(get_current_user_id)):
     result = TicketService.get_filtered_tickets(filter, db, current_user_id)
     return success_response(result, "Filtered tickets fetched successfully")
+    
+@router.patch("/{ticket_id}/assignee/send-mail", response_model=APIResponse[TicketResponse])
+def update_assignee_send_mail(ticket_id: int, mail_update: TicketAssigneeMailUpdate, db=Depends(get_db), current_user_id: int = Depends(get_current_user_id)):
+    result = TicketService.update_assignee_send_mail(ticket_id, mail_update.user_id, mail_update.send_mail, db)
+    return success_response(result, "Assignee mail setting updated successfully")
     
 @router.post("", response_model=APIResponse[TicketResponse], status_code=status.HTTP_201_CREATED)
 def create_ticket(ticket: TicketCreate, db=Depends(get_db), current_user_id: int = Depends(get_current_user_id)):
@@ -93,6 +116,11 @@ def get_all_tickets(db=Depends(get_db),current_user_id: int = Depends(get_curren
 def get_ticket(ticket_id: int, db=Depends(get_db)):
     result = TicketService.get_ticket(ticket_id, db)
     return success_response(result, "Ticket fetched successfully")
+
+@router.get("/project/{project_id}", response_model=APIResponse[List[TicketResponse]])
+def get_tickets_by_project(project_id: int, db=Depends(get_db)):
+    result = TicketService.get_tickets_by_project(project_id, db)
+    return success_response(result, "Tickets fetched successfully for project")
 
 @router.put("/{ticket_id}", response_model=APIResponse[TicketResponse])
 def update_ticket(ticket_id: int, ticket_update: TicketUpdate, db=Depends(get_db), current_user_id: int = Depends(get_current_user_id)):

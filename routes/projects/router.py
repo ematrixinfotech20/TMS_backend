@@ -22,6 +22,8 @@ class ProjectResponse(BaseModel):
     client_id: int
     project_type: Optional[str] = None
     client_name: Optional[str] = None
+    company_id: Optional[int] = None
+    company_name: Optional[str] = None
     ticket_count: int
     ticket_titles: List[str]
 

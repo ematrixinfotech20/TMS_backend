@@ -1,0 +1,14 @@
+===================== 23-05-26 =============== also done in DB till 23-05-26
+ALTER TABLE `departments` ADD `parent_department_id` INT NULL AFTER `name`;
+
+ALTER TABLE `departments` ADD FOREIGN KEY (`parent_department_id`) REFERENCES `departments`(`id`) ON DELETE CASCADE ON UPDATE RESTRICT;
+
+ALTER TABLE `assigned_tickets` ADD `send_mail` CHAR(1) NULL DEFAULT 'Y' AFTER `created_date`;
+
+ALTER TABLE `tickets` ADD `parent_ticket_id` INT NULL AFTER `id`;
+
+ALTER TABLE `tickets` ADD FOREIGN KEY (`parent_ticket_id`) REFERENCES `tickets`(`id`) ON DELETE CASCADE ON UPDATE RESTRICT;
+
+ALTER TABLE `projects` ADD `company_id` INT NULL AFTER `client_id`;
+
+ALTER TABLE `projects` ADD FOREIGN KEY (`company_id`) REFERENCES `companies`(`id`) ON DELETE CASCADE ON UPDATE RESTRICT;

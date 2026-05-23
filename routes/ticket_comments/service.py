@@ -158,7 +158,7 @@ class TicketCommentService:
         ticket_title = ticket_res['title'] if ticket_res else "Ticket"
         
         # Get all assigned users
-        cursor.execute("SELECT assign_to, role_id, email, first_name FROM assigned_tickets at JOIN users u ON at.assign_to = u.id WHERE at.ticket_id = %s", (ticket_id,))
+        cursor.execute("SELECT assign_to, role_id, email, first_name FROM assigned_tickets at JOIN users u ON at.assign_to = u.id WHERE at.ticket_id = %s AND (at.send_mail = 'Y' OR at.send_mail IS NULL)", (ticket_id,))
         assigned_users = cursor.fetchall()
         
         # Determine notification recipients
