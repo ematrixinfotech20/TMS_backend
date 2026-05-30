@@ -195,7 +195,6 @@ class UserService:
             db.commit()
             return True
 
-
     @staticmethod
     def send_login_credentials(user_id: int, db):
         with db.cursor() as cursor:

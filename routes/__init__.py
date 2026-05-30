@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from .auth import router as auth
+from .dashboard import router as dashboard
 from .system import router as system
 from .users import router as users
 from .departments import router as departments
@@ -17,6 +18,7 @@ from .today_ticket_work import router as today_ticket_work
 router = APIRouter()
 
 router.include_router(auth.router)
+router.include_router(dashboard.router)
 router.include_router(system.router)
 router.include_router(users.router)
 router.include_router(departments.router)

@@ -262,11 +262,4 @@ class AuthService:
                 
         return {"message": "Token is valid", "user": {"id": user_id, "email": email}}
 
-    @staticmethod
-    def get_dashboard_data(current_user_id: int, db):
-        with db.cursor() as cursor:
-            cursor.execute("SELECT COUNT(*) as count FROM assigned_tickets WHERE assign_to = %s", (current_user_id,))
-            result = cursor.fetchone()
-            ticket_count = result['count'] if result else 0
-        return {"assigned_tickets_count": ticket_count}
 

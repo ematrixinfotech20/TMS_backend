@@ -22,6 +22,7 @@ class TicketCreate(BaseModel):
     department_id: Optional[int] = None
     title: str = Field(..., min_length=1)
     description: Optional[str] = None
+    priority: Optional[str] = "low"
     working_hours: Optional[str]
     due_date: datetime
     as_customer: Optional[bool] = False
@@ -36,6 +37,7 @@ class TicketUpdate(BaseModel):
     department_id: Optional[int] = None
     title: str = Field(..., min_length=1)
     description: Optional[str] = None
+    priority: Optional[str] = "low"
     working_hours: Optional[str]
     due_date: datetime
     as_customer: Optional[bool] = False
@@ -66,6 +68,7 @@ class TicketResponse(BaseModel):
     department_id: Optional[int] = None
     title: str
     description: Optional[str]
+    priority: Optional[str] = None
     due_date: Optional[datetime]
     working_hours: Optional[str]
     as_customer: bool
@@ -90,6 +93,9 @@ class TicketFilter(BaseModel):
 class TicketAssigneeMailUpdate(BaseModel):
     user_id: int
     send_mail: str
+
+class TicketCloseReopen(BaseModel):
+    status_id: Optional[int] = None
 
 # Add this route after the existing ones
 @router.post("/filter", response_model=APIResponse[List[TicketResponse]])
@@ -141,3 +147,8 @@ def update_ticket_title(ticket_id: int, title_update: TicketTitleUpdate, db=Depe
 def delete_ticket(ticket_id: int, db=Depends(get_db)):
     TicketService.delete_ticket(ticket_id, db)
     return success_response(None, "Ticket deleted successfully", 204)
+
+@router.post("/{ticket_id}/close-reopen", response_model=APIResponse[TicketResponse])
+def close_or_reopen_ticket(ticket_id: int, body: TicketCloseReopen, db=Depends(get_db), current_user_id: int = Depends(get_current_user_id)):
+    result = TicketService.close_or_reopen_ticket(ticket_id, body.status_id, db, current_user_id)
+    return success_response(result, "Ticket status updated successfully")

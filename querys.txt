@@ -13,7 +13,7 @@ ALTER TABLE `projects` ADD `company_id` INT NULL AFTER `client_id`;
 
 ALTER TABLE `projects` ADD FOREIGN KEY (`company_id`) REFERENCES `companies`(`id`) ON DELETE CASCADE ON UPDATE RESTRICT;
 
-===================== 25-05-26 =============== also done in DB till 25-05-26
+===================== 25-05-26 ===============
 
 CREATE TABLE `today_ticket_work` (
     `id` INT NOT NULL AUTO_INCREMENT,
@@ -30,3 +30,11 @@ ALTER TABLE `today_ticket_work` ADD FOREIGN KEY (`user_id`) REFERENCES `users`(`
 ALTER TABLE `today_ticket_work` ADD `ticket_id` INT NOT NULL AFTER `note`;
 
 ALTER TABLE `today_ticket_work` ADD FOREIGN KEY (`ticket_id`) REFERENCES `tickets`(`id`) ON DELETE CASCADE ON UPDATE RESTRICT;
+
+===================== 30-05-26 =============== also done in DB till 30-05-26
+
+INSERT INTO `status` (`id`, `name`) VALUES (NULL, 'Close');
+
+ALTER TABLE `tickets` ADD `priority` VARCHAR(50) NULL AFTER `description`;
+
+ALTER TABLE `tickets` CHANGE `priority` `priority` VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'low';

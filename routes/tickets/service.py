@@ -189,11 +189,11 @@ class TicketService:
             ticket_no = f"{prefix}-{sn:02d}"
 
             sql = """
-                INSERT INTO tickets (parent_ticket_id, ticket_no, project_id, department_id, title, description, due_date, working_hours, as_customer, for_customer, status_id, created_by)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO tickets (parent_ticket_id, ticket_no, project_id, department_id, title, description, priority, due_date, working_hours, as_customer, for_customer, status_id, created_by)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
             cursor.execute(sql, (
-                ticket.parent_ticket_id, ticket_no, ticket.project_id, ticket.department_id, ticket.title, ticket.description, ticket.due_date, ticket.working_hours,
+                ticket.parent_ticket_id, ticket_no, ticket.project_id, ticket.department_id, ticket.title, ticket.description, ticket.priority, ticket.due_date, ticket.working_hours,
                 ticket.as_customer, ticket.for_customer, ticket.status_id, current_user_id
             ))
             db.commit()
@@ -315,11 +315,11 @@ class TicketService:
                                 
             sql = """
                 UPDATE tickets
-                SET parent_ticket_id=%s, project_id=%s,department_id=%s, title=%s, description=%s, due_date=%s, working_hours=%s, as_customer=%s, for_customer=%s, status_id=%s
+                SET parent_ticket_id=%s, project_id=%s,department_id=%s, title=%s, description=%s, priority=%s, due_date=%s, working_hours=%s, as_customer=%s, for_customer=%s, status_id=%s
                 WHERE id=%s
             """
             cursor.execute(sql, (
-                ticket_update.parent_ticket_id, ticket_update.project_id, ticket_update.department_id, ticket_update.title, ticket_update.description, ticket_update.due_date, ticket_update.working_hours,
+                ticket_update.parent_ticket_id, ticket_update.project_id, ticket_update.department_id, ticket_update.title, ticket_update.description, ticket_update.priority, ticket_update.due_date, ticket_update.working_hours,
                 ticket_update.as_customer, ticket_update.for_customer, ticket_update.status_id, ticket_id
             ))
             
@@ -551,3 +551,26 @@ class TicketService:
                     ticket_details['parent_ticket_title'] = None
                     results.append(ticket_details)
             return results
+
+    @staticmethod
+    def close_or_reopen_ticket(ticket_id: int, status_id, db, current_user_id):
+        with db.cursor() as cursor:
+            cursor.execute("SELECT id FROM tickets WHERE id=%s", (ticket_id,))
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail="Ticket not found")
+            
+            target_status_id = status_id
+            if target_status_id is None:
+                cursor.execute("SELECT id FROM status WHERE name = 'Close' LIMIT 1")
+                status_row = cursor.fetchone()
+                if not status_row:
+                    cursor.execute("SELECT id FROM status WHERE LOWER(name) = 'close' LIMIT 1")
+                    status_row = cursor.fetchone()
+                if not status_row:
+                    raise HTTPException(status_code=400, detail="Status 'Close' not found in database")
+                target_status_id = status_row['id']
+                
+            cursor.execute("UPDATE tickets SET status_id=%s WHERE id=%s", (target_status_id, ticket_id))
+            db.commit()
+            
+            return TicketService.get_ticket_internal(cursor, ticket_id)

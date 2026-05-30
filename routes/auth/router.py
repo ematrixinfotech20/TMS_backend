@@ -37,8 +37,4 @@ def verify_token(token: str, db=Depends(get_db)):
     result = AuthService.verify_token(token, db)
     return success_response(result["user"], result["message"])
 
-@router.get("/dashboard")
-def get_dashboard_data(db=Depends(get_db), current_user_id: int = Depends(get_current_user_id)):
-    result = AuthService.get_dashboard_data(current_user_id, db)
-    return success_response(result, "Dashboard data fetched successfully")
 
