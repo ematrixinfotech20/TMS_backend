@@ -16,8 +16,10 @@ app_env = os.getenv("APP_ENV", "env")
 # 3. Load the specific overrides (override=True ensures these values overwrite the base ones)
 if app_env == "local":
     load_dotenv(dotenv_path=os.path.join(BASE_DIR, ".env.local"), override=True)
-else:
+elif app_env == "prod":
     load_dotenv(dotenv_path=os.path.join(BASE_DIR, ".env.prod"), override=True)
+else:
+    load_dotenv(dotenv_path=os.path.join(BASE_DIR, ".env.dev"), override=True)
 
 import logging
 logger = logging.getLogger(__name__)    
@@ -78,7 +80,9 @@ app.include_router(api_router)
 def read_root():
     return success_response(None, "TMS API is running.")
 
+# python -m venv .venv
 # .\venv\Scripts\activate
+# pip install -r requirements.txt
 # uvicorn main:app --reload --host 0.0.0.0 --port 5000
 # for /d /r "C:\Jay\TMS\backend" %i in (__pycache__) do @if exist "%i" rd /s /q "%i"
 # tail -f /devwebapp_desk_ematrix/webroot/desk.ematrixinfotech.com/py/logs/tms.log
