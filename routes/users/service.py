@@ -137,13 +137,14 @@ class UserService:
             
             sql = """
                 INSERT INTO users 
-                (first_name, last_name, email, password_hash, role_id, city, state, country, zip, phone, is_sms_active, is_active, report_to, company_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                (first_name, last_name, email, password_hash, role_id, city, state, country, zip, phone, is_sms_active, is_active, report_to, company_id, work_hours)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
             vals = (
                 user.first_name, user.last_name, user.email, hashed_pw, user.role_id, 
                 user.city, user.state, user.country, user.zip, user.phone, 
-                user.is_sms_active, user.is_active, user.report_to, user.company_id
+                user.is_sms_active, user.is_active, user.report_to, user.company_id,
+                user.work_hours
             )
             
             cursor.execute(sql, vals)

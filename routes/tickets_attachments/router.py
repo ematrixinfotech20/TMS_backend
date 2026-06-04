@@ -1,3 +1,4 @@
+from fastapi import HTTPException
 from fastapi import APIRouter, Depends, status, UploadFile, File, Form
 from database import get_db
 from core.response import success_response
@@ -17,6 +18,8 @@ def upload_attachment(
     db=Depends(get_db), 
     current_user_id: int = Depends(get_current_user_id)
 ):
+    if not current_user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     result = TicketsAttachmentsService.upload_attachment(ticket_id, file, chunkIndex, totalChunks, fileName, totalSize, db, current_user_id)
     return success_response(
         {"id": result.get("id"), "file_name": result.get("file_name"), "file_URL": result.get("file_URL"), "status": result.get("status")}, 
@@ -24,6 +27,8 @@ def upload_attachment(
     )
 
 @router.delete("/{attachment_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_attachment(ticket_id: int, attachment_id: int, db=Depends(get_db)):
-    TicketsAttachmentsService.delete_attachment(ticket_id, attachment_id, db)
+def delete_attachment(ticket_id: int, attachment_id: int, db=Depends(get_db), current_user_id: int = Depends(get_current_user_id)):
+    if not current_user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    TicketsAttachmentsService.delete_attachment(ticket_id, attachment_id, db, current_user_id)
     return success_response(None, "Attachment deleted successfully", 204)

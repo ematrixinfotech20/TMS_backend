@@ -1,3 +1,4 @@
+from fastapi import HTTPException
 from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, Field
 from typing import List, Optional
@@ -52,20 +53,28 @@ class TicketCommentUpdate(BaseModel):
 
 @router.get("", response_model=APIResponse[List[TicketCommentResponse]])
 def get_comments(ticket_id: int, db=Depends(get_db), current_user_id: int = Depends(get_current_user_id)):
+    if not current_user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     result = TicketCommentService.get_comments_by_ticket(ticket_id, db, current_user_id)
     return success_response(result, "Comments fetched successfully")
 
 @router.post("", response_model=APIResponse[TicketCommentResponse], status_code=status.HTTP_201_CREATED)
 def create_comment(comment: TicketCommentCreate, db=Depends(get_db), current_user_id: int = Depends(get_current_user_id)):
+    if not current_user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     result = TicketCommentService.create_comment(comment, db, current_user_id)
     return success_response(result, "Comment added successfully", 201)
 
 @router.put("/{id}", response_model=APIResponse[TicketCommentResponse])
 def update_comment(id: int, comment_update: TicketCommentUpdate, db=Depends(get_db), current_user_id: int = Depends(get_current_user_id)):
+    if not current_user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     result = TicketCommentService.update_comment(id, comment_update, db, current_user_id)
     return success_response(result, "Comment updated successfully")
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_comment(id: int, db=Depends(get_db), current_user_id: int = Depends(get_current_user_id)):
+    if not current_user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     TicketCommentService.delete_comment(id, db, current_user_id)
     return success_response(None, "Comment deleted successfully", 204)

@@ -1,3 +1,4 @@
+from fastapi import HTTPException
 from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, Field
 from typing import List, Optional
@@ -100,55 +101,77 @@ class TicketCloseReopen(BaseModel):
 # Add this route after the existing ones
 @router.post("/filter", response_model=APIResponse[List[TicketResponse]])
 def filter_tickets(filter: TicketFilter, db=Depends(get_db), current_user_id: int = Depends(get_current_user_id)):
+    if not current_user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     result = TicketService.get_filtered_tickets(filter, db, current_user_id)
     return success_response(result, "Filtered tickets fetched successfully")
     
 @router.patch("/{ticket_id}/assignee/send-mail", response_model=APIResponse[TicketResponse])
 def update_assignee_send_mail(ticket_id: int, mail_update: TicketAssigneeMailUpdate, db=Depends(get_db), current_user_id: int = Depends(get_current_user_id)):
+    if not current_user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     result = TicketService.update_assignee_send_mail(ticket_id, mail_update.user_id, mail_update.send_mail, db)
     return success_response(result, "Assignee mail setting updated successfully")
     
 @router.post("", response_model=APIResponse[TicketResponse], status_code=status.HTTP_201_CREATED)
 def create_ticket(ticket: TicketCreate, db=Depends(get_db), current_user_id: int = Depends(get_current_user_id)):
+    if not current_user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     result = TicketService.create_ticket(ticket, db, current_user_id)
     return success_response(result, "Ticket created successfully", 201)
 
 @router.get("", response_model=APIResponse[List[TicketResponse]])
 def get_all_tickets(db=Depends(get_db),current_user_id: int = Depends(get_current_user_id)):
+    if not current_user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     result = TicketService.get_all_tickets(db,current_user_id)
     return success_response(result, "Tickets fetched successfully")
 
 @router.get("/{ticket_id}", response_model=APIResponse[TicketResponse])
-def get_ticket(ticket_id: int, db=Depends(get_db)):
+def get_ticket(ticket_id: int, db=Depends(get_db), current_user_id: int = Depends(get_current_user_id)):
+    if not current_user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     result = TicketService.get_ticket(ticket_id, db)
     return success_response(result, "Ticket fetched successfully")
 
 @router.get("/project/{project_id}", response_model=APIResponse[List[TicketResponse]])
-def get_tickets_by_project(project_id: int, db=Depends(get_db)):
+def get_tickets_by_project(project_id: int, db=Depends(get_db), current_user_id: int = Depends(get_current_user_id)):
+    if not current_user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     result = TicketService.get_tickets_by_project(project_id, db)
     return success_response(result, "Tickets fetched successfully for project")
 
 @router.put("/{ticket_id}", response_model=APIResponse[TicketResponse])
 def update_ticket(ticket_id: int, ticket_update: TicketUpdate, db=Depends(get_db), current_user_id: int = Depends(get_current_user_id)):
+    if not current_user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     result = TicketService.update_ticket(ticket_id, ticket_update, db, current_user_id)
     return success_response(result, "Ticket updated successfully")
 
 @router.patch("/{ticket_id}/status", response_model=APIResponse[TicketResponse])
 def update_ticket_status(ticket_id: int, status_update: TicketStatusUpdate, db=Depends(get_db), current_user_id: int = Depends(get_current_user_id)):
+    if not current_user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     result = TicketService.update_ticket_status(ticket_id, status_update, db, current_user_id)
     return success_response(result, "Ticket status updated successfully")
 
 @router.patch("/{ticket_id}/title", response_model=APIResponse[TicketResponse])
 def update_ticket_title(ticket_id: int, title_update: TicketTitleUpdate, db=Depends(get_db), current_user_id: int = Depends(get_current_user_id)):
+    if not current_user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     result = TicketService.update_ticket_title(ticket_id, title_update, db, current_user_id)
     return success_response(result, "Ticket title updated successfully")
 
 @router.delete("/{ticket_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_ticket(ticket_id: int, db=Depends(get_db)):
-    TicketService.delete_ticket(ticket_id, db)
+def delete_ticket(ticket_id: int, db=Depends(get_db), current_user_id: int = Depends(get_current_user_id)):
+    if not current_user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    TicketService.delete_ticket(ticket_id, db, current_user_id)
     return success_response(None, "Ticket deleted successfully", 204)
 
 @router.post("/{ticket_id}/close-reopen", response_model=APIResponse[TicketResponse])
 def close_or_reopen_ticket(ticket_id: int, body: TicketCloseReopen, db=Depends(get_db), current_user_id: int = Depends(get_current_user_id)):
+    if not current_user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     result = TicketService.close_or_reopen_ticket(ticket_id, body.status_id, db, current_user_id)
     return success_response(result, "Ticket status updated successfully")

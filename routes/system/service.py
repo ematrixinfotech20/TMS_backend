@@ -24,11 +24,15 @@ class SystemService:
             
             menu_items = []
             projects_items = []
+            reports_items = []
             settings_items = []
     
             for func in all_functionalities:
                 title = func['name'].title()
-                path = f"/{func['name'].replace(' ', '-')}"
+                if title == "Manage Reports":
+                    path = "/dailyreport"
+                else:
+                    path = f"/{func['name'].replace(' ', '-')}"
     
                 func_modules = [m['name'] for m in all_modules if m['functionality_id'] == func['id']]
                 module_name = func_modules[0] if func_modules else ""
@@ -46,6 +50,31 @@ class SystemService:
                 
                 if title in ["Manage Project", "Manage Tickets"]:
                     projects_items.append(item)
+                elif title == "Manage Reports":
+                    # Fetch modules for reports functionality (id 14)
+                    cursor.execute("SELECT id, name FROM modules WHERE functionality_id = %s", (func['id'],))
+                    report_modules = cursor.fetchall()
+                    for r_mod in report_modules:
+                        # Check permission for this specific module
+                        cursor.execute("""
+                            SELECT COUNT(*) as cnt
+                            FROM role_module_actions rma
+                            JOIN modules_actions ma ON rma.module_action_id = ma.id
+                            WHERE rma.role_id = %s AND ma.module_id = %s AND ma.action_id = 4
+                        """, (role_id, r_mod['id']))
+                        has_perm = cursor.fetchone()['cnt'] > 0 or role_id == 1
+                        if has_perm:
+                            path_name = "/dailyreport" if r_mod['name'] == "Daily Report" else "/monthlyreport"
+                            reports_items.append({
+                                "id": f"report-{r_mod['id']}",
+                                "title": r_mod['name'],
+                                "path": path_name,
+                                "permission": {
+                                    "functionality_name": func['name'],
+                                    "module_name": r_mod['name'],
+                                    "actions": [4]
+                                }
+                            })
                 else:
                     settings_items.append(item)
             
@@ -61,6 +90,12 @@ class SystemService:
                 menu_items.append({
                     "partition": "Projects",
                     "items": projects_items
+                })
+
+            if reports_items:
+                menu_items.append({
+                    "partition": "Reports",
+                    "items": reports_items
                 })
                 
             if settings_items:

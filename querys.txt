@@ -31,10 +31,26 @@ ALTER TABLE `today_ticket_work` ADD `ticket_id` INT NOT NULL AFTER `note`;
 
 ALTER TABLE `today_ticket_work` ADD FOREIGN KEY (`ticket_id`) REFERENCES `tickets`(`id`) ON DELETE CASCADE ON UPDATE RESTRICT;
 
-===================== 30-05-26 =============== also done in DB till 30-05-26
+===================== 30-05-26 =============== also done in dev and prod DB till 30-05-26
 
 INSERT INTO `status` (`id`, `name`) VALUES (NULL, 'Close');
 
 ALTER TABLE `tickets` ADD `priority` VARCHAR(50) NULL AFTER `description`;
 
 ALTER TABLE `tickets` CHANGE `priority` `priority` VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'low';
+
+===================== 04-06-26 =============== 
+
+INSERT INTO `functionalities` (`id`, `name`) VALUES (NULL, 'manage reports');
+
+INSERT INTO `modules` (`id`, `functionality_id`, `name`) VALUES (NULL, '14', 'Reports');
+
+INSERT INTO `modules_actions` (`id`, `module_id`, `action_id`) VALUES (NULL, '8', '4')
+
+ALTER TABLE `users` ADD `work_hours` DOUBLE NULL AFTER `is_sms_active`;
+
+UPDATE `modules` SET `name` = 'Daily Report' WHERE `modules`.`id` = 8
+
+INSERT INTO `modules` (`id`, `functionality_id`, `name`) VALUES (NULL, '14', 'Monthly Report');
+
+INSERT INTO `modules_actions` (`id`, `module_id`, `action_id`) VALUES (NULL, '9', '4')

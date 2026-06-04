@@ -1,3 +1,4 @@
+from fastapi import HTTPException
 from fastapi import APIRouter, Depends, status, UploadFile, File, Form
 from typing import Optional
 from database import get_db
@@ -12,17 +13,23 @@ def get_companies_with_users(
     db=Depends(get_db),
     current_user_id: int = Depends(get_current_user_id)
 ):
+    if not current_user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     result = CompanyService.get_users_by_company(db)
     return success_response(result, "Companies with users fetched successfully")
 
 @router.get("")
-def get_all_companies(db=Depends(get_db)):
+def get_all_companies(db=Depends(get_db),current_user_id: int = Depends(get_current_user_id)):
+    if not current_user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     result = CompanyService.get_all(db)
     return success_response(result, "Companies fetched successfully")
 
 
 @router.get("/{company_id}")
-def get_company(company_id: int, db=Depends(get_db)):
+def get_company(company_id: int, db=Depends(get_db),current_user_id: int = Depends(get_current_user_id)):
+    if not current_user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     result = CompanyService.get_by_id(company_id, db)
     return success_response(result, "Company fetched successfully")
 
@@ -39,8 +46,10 @@ def create_company(
     zip: Optional[str] = Form(None),
     logo: Optional[UploadFile] = File(None),
     db=Depends(get_db),
-    current_user_id: int = Depends(get_current_user_id)
+   current_user_id: int = Depends(get_current_user_id)
 ):
+    if not current_user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     result = CompanyService.create(
         company_name, email, phone, address, city, state, country, zip,
         logo, current_user_id, db
@@ -64,6 +73,8 @@ def update_company(
     db=Depends(get_db),
     current_user_id: int = Depends(get_current_user_id)
 ):
+    if not current_user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     should_remove = remove_logo == "true"
     result = CompanyService.update(
         company_id, company_name, email, phone, address, city, state, country, zip,
@@ -73,5 +84,7 @@ def update_company(
 
 
 @router.delete("/{company_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_company(company_id: int, db=Depends(get_db)):
+def delete_company(company_id: int, db=Depends(get_db),current_user_id: int = Depends(get_current_user_id)):
+    if not current_user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     CompanyService.delete(company_id, db)

@@ -1,3 +1,4 @@
+from fastapi import HTTPException
 import logging
 
 logger = logging.getLogger(__name__)
@@ -5,6 +6,8 @@ logger = logging.getLogger(__name__)
 class DashboardService:
     @staticmethod
     def get_dashboard_data(current_user_id: int, db):
+        if not current_user_id:
+            raise HTTPException(status_code=401, detail="Unauthorized")
         with db.cursor() as cursor:
             # 1. Assigned tickets count
             cursor.execute("SELECT COUNT(*) as count FROM assigned_tickets WHERE assign_to = %s", (current_user_id,))

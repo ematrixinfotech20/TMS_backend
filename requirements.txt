@@ -10,3 +10,4 @@ Pillow
 email_validator
 jinja2
 python-dotenv
+a2wsgi
