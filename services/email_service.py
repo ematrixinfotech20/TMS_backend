@@ -7,10 +7,10 @@ from jinja2 import Environment, FileSystemLoader
 import logging
 logger = logging.getLogger(__name__)
 
-SMTP_SERVER = "smtp.gmail.com"
-SMTP_PORT = 587
-SENDER_EMAIL = "webzoidsolution@gmail.com"
-SENDER_PASSWORD = "fdeetasvdsoprzwr"
+SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
+SENDER_EMAIL = os.getenv("SENDER_EMAIL", "webzoidsolution@gmail.com")
+SENDER_PASSWORD = os.getenv("SENDER_PASSWORD", "fdeetasvdsoprzwr")
 
 # Setup Jinja2 environment
 TEMPLATE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates")
@@ -47,6 +47,9 @@ class EmailService:
             server.login(SENDER_EMAIL, SENDER_PASSWORD)
             server.sendmail(SENDER_EMAIL, to_email, msg.as_string())
             server.quit()
+            print(f"Email successfully sent to {to_email}")
             logger.info(f"Email successfully sent to {to_email}")
         except Exception as e:
+            print(f"Failed to send email to {to_email}: {e}")
+            logger.error(f"Failed to send email to {to_email}: {e}", exc_info=True)
             logger.info(f"Failed to send email to {to_email}: {e}")
